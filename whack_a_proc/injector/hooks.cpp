@@ -1,9 +1,6 @@
-#include <stdio.h>
 #include "hooks.h"
 #include "include/pe_sieve_api.h"
-
-DWORD addrs[1000];
-DWORD count = 0;
+#include <Psapi.h>
 
 VOID ScanProcess(DWORD dwPid) {
 	t_params params = { 0 };
@@ -14,28 +11,28 @@ VOID ScanProcess(DWORD dwPid) {
 	PESieve_scan(params);
 }
 
-VOID __stdcall ah_Encryption(
-	DWORD arg1,
+VOID __stdcall ah_ZwMapViewOfSection(
+	HANDLE          SectionHandle,
+	HANDLE          ProcessHandle,
+	PVOID           *BaseAddress,
+	ULONG_PTR       ZeroBits,
+	SIZE_T          CommitSize,
+	PLARGE_INTEGER  SectionOffset,
+	PSIZE_T         ViewSize,
+	DWORD InheritDisposition,
+	ULONG           AllocationType,
+	ULONG           Win32Protect,
 	DWORD retvalue
 ) {
-	CHAR line[1024];
-	HANDLE hFile;
-	DWORD dwBytes;
-	DWORD origin;
-	__asm {
-		mov eax, dword ptr[ebp + 0x18]
-		mov origin, eax
+	WCHAR pFilename[100];
+	WCHAR *pName;
+	GetMappedFileNameW(ProcessHandle, *BaseAddress, pFilename, 100);
+	pName = wcsrchr(pFilename, '\\');
+	if (pName == NULL)
+		return;
+	if (!wcscmp(pName + 1, L"ntdll.dll")) {
+		*BaseAddress = GetModuleHandleA("ntdll.dll");
 	}
-	for (int i = 0; i < count; i++) {
-		if (origin == addrs[i])
-			return;
-	}
-	addrs[count++] = origin;
-	wsprintfA(line, "%08x %08x\n", origin, retvalue);
-	hFile = CreateFileA("log.txt", GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	SetFilePointer(hFile, 0, NULL, FILE_END);
-	WriteFile(hFile, line, lstrlenA(line), &dwBytes, NULL);
-	CloseHandle(hFile);
 }
 
 VOID __stdcall bh_NtCreateThread(

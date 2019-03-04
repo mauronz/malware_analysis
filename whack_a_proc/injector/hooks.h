@@ -2,6 +2,20 @@
 
 #include <Windows.h>
 
+VOID __stdcall ah_ZwMapViewOfSection(
+	HANDLE          SectionHandle,
+	HANDLE          ProcessHandle,
+	PVOID           *BaseAddress,
+	ULONG_PTR       ZeroBits,
+	SIZE_T          CommitSize,
+	PLARGE_INTEGER  SectionOffset,
+	PSIZE_T         ViewSize,
+	DWORD InheritDisposition,
+	ULONG           AllocationType,
+	ULONG           Win32Protect,
+	DWORD retvalue
+);
+
 VOID __stdcall bh_NtCreateThread(
 	OUT PHANDLE             ThreadHandle,
 	IN ACCESS_MASK          DesiredAccess,
