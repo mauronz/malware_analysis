@@ -22,4 +22,5 @@ typedef NTSTATUS(WINAPI* TdefNtQueryInformationProcess)(
 
 extern "C" BOOL __declspec(dllexport) __cdecl inject();
 
+BOOL SetEntrypointHook(HANDLE hProcess);
 BOOL SetHooks();
