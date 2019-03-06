@@ -9,9 +9,10 @@ DWORD pMyProcesses[MYPROC_NUM] = { 0 };
 
 VOID ScanProcess(DWORD dwPid) {
 	HANDLE hProcess;
+	WCHAR pImageFilename[MAX_PATH], pMessage[200];
+	DWORD dwSize = sizeof(pImageFilename);
 	t_params params = { 0 };
 
-	MessageBoxA(NULL, "scan", "", 0);
 	if (dwPid == GetCurrentProcessId())
 		return;
 	params.pid = dwPid;
@@ -21,7 +22,11 @@ VOID ScanProcess(DWORD dwPid) {
 		if (dwPid == pMyProcesses[i]) {
 			hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
 			if (hProcess != INVALID_HANDLE_VALUE) {
-				SetEntrypointHook(hProcess);
+				QueryFullProcessImageNameW(hProcess, 0, pImageFilename, &dwSize);
+				wsprintfW(pMessage, L"New process %s (PID: %d). Do you want to inject into it?", pImageFilename, dwPid);
+				if (MessageBoxW(NULL, pMessage, L"Injector", MB_YESNO) == IDYES) {
+					SetEntrypointHook(hProcess);
+				}
 				CloseHandle(hProcess);
 				break;
 			}
@@ -43,7 +48,6 @@ VOID __stdcall ah_NtCreateUserProcess(
 	_In_opt_ PVOID AttributeList,
 	ULONG retvalue
 ) {
-	MessageBoxA(NULL, "ntcreateuerprocess", "", 0);
 	if (!retvalue) {
 		for (int i = 0; i < MYPROC_NUM; i++) {
 			if (!pMyProcesses[i]) {
