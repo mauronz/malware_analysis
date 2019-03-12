@@ -1,9 +1,11 @@
 #include "hooks.h"
 #include "injector.h"
-#include "include/pe_sieve_api.h"
+#include "include/pe_sieve_types.h"
 #include <Psapi.h>
 
 #define MYPROC_NUM 100
+
+extern TdefPESieve_scan _PESieve_scan;
 
 DWORD pMyProcesses[MYPROC_NUM] = { 0 };
 
@@ -17,7 +19,7 @@ VOID ScanProcess(DWORD dwPid) {
 		return;
 	params.pid = dwPid;
 	params.quiet = true;
-	PESieve_scan(params);
+	_PESieve_scan(params);
 	for (int i = 0; i < MYPROC_NUM && pMyProcesses[i]; i++) {
 		if (dwPid == pMyProcesses[i]) {
 			hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);

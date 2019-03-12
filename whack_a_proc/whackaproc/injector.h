@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <stdio.h>
 #include "APIhooklib.h"
+#include "include/pe_sieve_types.h"
 
 struct PROCESS_BASIC_INFORMATION {
 	PVOID Reserved1;
@@ -19,6 +20,8 @@ typedef NTSTATUS(WINAPI* TdefNtQueryInformationProcess)(
 	DWORD ProcessInformationLength,
 	PDWORD ReturnLength
 	);
+
+typedef t_report (__stdcall *TdefPESieve_scan)(t_params args);
 
 extern "C" BOOL __declspec(dllexport) __cdecl inject();
 
