@@ -5,6 +5,7 @@
 
 #define MYPROC_NUM 100
 
+extern HANDLE hPipe;
 extern TdefPESieve_scan _PESieve_scan;
 
 DWORD pMyProcesses[MYPROC_NUM] = { 0 };
@@ -12,14 +13,21 @@ DWORD pMyProcesses[MYPROC_NUM] = { 0 };
 VOID ScanProcess(DWORD dwPid) {
 	HANDLE hProcess;
 	WCHAR pImageFilename[MAX_PATH], pMessage[200];
-	DWORD dwSize = sizeof(pImageFilename);
 	t_params params = { 0 };
 
 	if (dwPid == GetCurrentProcessId())
 		return;
-	params.pid = dwPid;
-	params.quiet = true;
-	_PESieve_scan(params);
+	DWORD dwSize;
+	DWORD dwCode = 1;
+	WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
+	WriteFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL);
+	ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
+	if (dwCode == 2)
+		MessageBoxA(NULL, "yes", "", 0);
+	else
+		MessageBoxA(NULL, "noo", "", 0);
+
+	dwSize = sizeof(pImageFilename);
 	for (int i = 0; i < MYPROC_NUM && pMyProcesses[i]; i++) {
 		if (dwPid == pMyProcesses[i]) {
 			hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
