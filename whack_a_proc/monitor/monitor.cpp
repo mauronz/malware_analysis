@@ -1,58 +1,20 @@
 #include "monitor.h"
 #include "peb.h"
-#include "include/pe_sieve_api.h"
+#include "ntdef.h"
+#include "communication.h"
 #include <stdio.h>
 
 #pragma comment(lib, "pe-sieve.lib")
 
 #define SHELLCODE_SIZE 96
-#define BUFSIZE 1024
+#define MAX_THREAD_COUNT 1000
+
+HANDLE hSemaphore;
+HANDLE hThreadCountMutex;
+DWORD dwThreadCount = 0;
 
 DWORD dwDllPathSize = 0;
 WCHAR pDllPath[MAX_PATH];
-
-HANDLE CreateThreadPipe(DWORD dwPid, DWORD dwTid) {
-	WCHAR pPipeName[64];
-	wsprintfW(pPipeName, L"\\\\.\\pipe\\whack%08x%08x", dwPid, dwTid);
-	wprintf(L"%s\n", pPipeName);
-	return CreateNamedPipeW(
-		pPipeName,
-		PIPE_ACCESS_DUPLEX,       // read/write access 
-		PIPE_TYPE_MESSAGE |       // message type pipe 
-		PIPE_READMODE_MESSAGE |   // message-read mode 
-		PIPE_WAIT,                // blocking mode 
-		PIPE_UNLIMITED_INSTANCES, // max. instances  
-		BUFSIZE,                  // output buffer size 
-		BUFSIZE,                  // input buffer size 
-		0,                        // client time-out 
-		NULL);                    // default security attribute
-}
-
-BOOL Communicate(HANDLE hPipe) {
-	t_params params = { 0 };
-	DWORD dwCode, dwSize, dwPid;
-
-	Sleep(2000);
-
-	if (hPipe == INVALID_HANDLE_VALUE) {
-		return FALSE;
-	}
-	if (ConnectNamedPipe(hPipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED) {
-		while (TRUE) {
-			if (!ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL) || dwSize != sizeof(dwCode));
-			if (dwCode == 1) {
-				if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL) || dwSize != sizeof(dwPid));
-				params.pid = dwPid;
-				params.quiet = true;
-				PESieve_scan(params);
-				dwCode = 2;
-				if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL) || dwSize != sizeof(dwCode));
-			}
-		}
-	}
-	CloseHandle(hPipe);
-	return TRUE;
-}
 
 BOOL SetEntrypointHook(HANDLE hProcess) {
 	SIZE_T written;
@@ -227,7 +189,18 @@ BOOL SetEntrypointHook(HANDLE hProcess) {
 
 DWORD __stdcall ThreadRoutine(LPVOID lpParams) {
 	Communicate((HANDLE)lpParams);
+	ReleaseSemaphore(hSemaphore, 1, NULL);
 	return 0;
+}
+
+HANDLE CreateWorkerThread(DWORD dwPid, DWORD dwTid) {
+	HANDLE hPipe = CreateThreadPipe(dwPid, dwTid);
+	if (hPipe == INVALID_HANDLE_VALUE)
+		return NULL;
+	WaitForSingleObject(hThreadCountMutex, INFINITE);
+	dwThreadCount++;
+	ReleaseMutex(hThreadCountMutex);
+	return CreateThread(NULL, 0, ThreadRoutine, (LPVOID)hPipe, 0, NULL);
 }
 
 int wmain(int argc, WCHAR **argv) {
@@ -235,6 +208,11 @@ int wmain(int argc, WCHAR **argv) {
 	PROCESS_INFORMATION pi;
 	LPWSTR pTargetCmd;
 	LPWSTR pCmdline = GetCommandLineW();
+	BOOL bRunning = TRUE;
+
+	hSemaphore = CreateSemaphoreW(NULL, 0, MAX_THREAD_COUNT, NULL);
+	hThreadCountMutex = CreateMutexW(NULL, FALSE, NULL);
+
 	if (argc > 1) {
 		pTargetCmd = wcsstr(pCmdline, argv[1]);
 		ZeroMemory(&si, sizeof(si));
@@ -244,9 +222,17 @@ int wmain(int argc, WCHAR **argv) {
 			return 1;
 		}
 		SetEntrypointHook(pi.hProcess);
-		HANDLE hThread = CreateThread(NULL, 0, ThreadRoutine, (LPVOID)CreateThreadPipe(pi.dwProcessId, pi.dwThreadId), 0, NULL);
+		HANDLE hThread = CreateWorkerThread(pi.dwProcessId, pi.dwThreadId);
 		ResumeThread(pi.hThread);
-		WaitForSingleObject(hThread, INFINITE);
+		DWORD dwRes;
+		while (bRunning) {
+			dwRes = WaitForSingleObject(hSemaphore, INFINITE);
+			dwRes = WaitForSingleObject(hThreadCountMutex, INFINITE);
+			if (--dwThreadCount == 0)
+				bRunning = FALSE;
+			ReleaseMutex(hThreadCountMutex);
+		}
+		//WaitForSingleObject(hThread, INFINITE);
 	}
 
 	return 0;

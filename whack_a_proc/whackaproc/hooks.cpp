@@ -1,45 +1,39 @@
 #include "hooks.h"
 #include "injector.h"
-#include "include/pe_sieve_types.h"
+#include "communication.h"
 #include <Psapi.h>
 
 #define MYPROC_NUM 100
 
 extern HANDLE hPipe;
-extern TdefPESieve_scan _PESieve_scan;
 
 DWORD pMyProcesses[MYPROC_NUM] = { 0 };
 
-VOID ScanProcess(DWORD dwPid) {
-	HANDLE hProcess;
-	WCHAR pImageFilename[MAX_PATH], pMessage[200];
-	t_params params = { 0 };
+VOID ScanProcess(DWORD dwPid, DWORD dwTid) {
+	DWORD dwSize;
+	DWORD dwCode = CODE_SCAN;
 
 	if (dwPid == GetCurrentProcessId())
 		return;
-	DWORD dwSize;
-	DWORD dwCode = 1;
 	WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
 	WriteFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL);
 	ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
-	if (dwCode == 2)
-		MessageBoxA(NULL, "yes", "", 0);
+	if (dwCode == CODE_OK)
+		MessageBoxA(NULL, "yes", "scan", 0);
 	else
-		MessageBoxA(NULL, "noo", "", 0);
+		MessageBoxA(NULL, "noo", "scan", 0);
 
-	dwSize = sizeof(pImageFilename);
 	for (int i = 0; i < MYPROC_NUM && pMyProcesses[i]; i++) {
 		if (dwPid == pMyProcesses[i]) {
-			hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
-			if (hProcess != INVALID_HANDLE_VALUE) {
-				QueryFullProcessImageNameW(hProcess, 0, pImageFilename, &dwSize);
-				wsprintfW(pMessage, L"New process %s (PID: %d). Do you want to inject into it?", pImageFilename, dwPid);
-				if (MessageBoxW(NULL, pMessage, L"Injector", MB_YESNO) == IDYES) {
-					SetEntrypointHook(hProcess);
-				}
-				CloseHandle(hProcess);
-				break;
-			}
+			DWORD dwCode = CODE_INJECT;
+			WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
+			WriteFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL);
+			WriteFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL);
+			ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
+			if (dwCode == CODE_OK)
+				MessageBoxA(NULL, "yes", "inject", 0);
+			else
+				MessageBoxA(NULL, "noo", "inject", 0);
 		}
 	}
 }
@@ -102,9 +96,11 @@ VOID __stdcall bh_NtCreateThread(
 	IN PVOID         InitialTeb,
 	IN BOOLEAN              CreateSuspended) {
 	DWORD dwPid;
+	DWORD dwTid;
 	if (!CreateSuspended) {
 		dwPid = GetProcessId(ProcessHandle);
-		ScanProcess(dwPid);
+		dwTid = GetThreadId(ThreadHandle);
+		ScanProcess(dwPid, dwTid);
 	}
 }
 
@@ -122,13 +118,16 @@ VOID __stdcall bh_NtCreateThreadEx(
 	IN  PVOID AttributeList OPTIONAL
 	) {
 	DWORD dwPid;
+	DWORD dwTid;
 	if ((CreateFlags & CREATE_SUSPENDED) == 0) {
 		dwPid = GetProcessId(ProcessHandle);
-		ScanProcess(dwPid);
+		dwTid = GetThreadId(ThreadHandle);
+		ScanProcess(dwPid, dwTid);
 	}
 }
 
 VOID __stdcall bh_NtResumeThread(HANDLE ThreadHandle, PULONG SuspendCount) {
 	DWORD dwPid = GetProcessIdOfThread(ThreadHandle);
-	ScanProcess(dwPid);
+	DWORD dwTid = GetThreadId(ThreadHandle);
+	ScanProcess(dwPid, dwTid);
 }
