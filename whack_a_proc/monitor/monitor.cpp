@@ -68,18 +68,6 @@ BOOL SetEntrypointHook(HANDLE hProcess) {
 	*(DWORD *)(pCustomMemcpy + 6) = (DWORD)peb.ImageBaseAddress + dwEntrypoint;
 	*(DWORD *)(pCustomMemcpy + 13) = (DWORD)pRemoteAddress + SHELLCODE_SIZE + 4 + 4;
 
-	// mov eax, offset libname
-	// push eax
-	pShellcode[dwOffset++] = 0xb8;
-	*(DWORD *)(pShellcode + dwOffset) = (DWORD)pRemoteAddress + SHELLCODE_SIZE + 9;
-	dwOffset += sizeof(DWORD);
-	pShellcode[dwOffset++] = 0x50;
-
-	// call LoadLibraryW
-	pShellcode[dwOffset++] = 0xe8;
-	*(DWORD *)(pShellcode + dwOffset) = (DWORD)LoadLibraryW - ((DWORD)pRemoteAddress + dwOffset + 4);
-	dwOffset += sizeof(DWORD);
-
 	// mov eax, offset oldprotect
 	// push eax
 	pShellcode[dwOffset++] = 0xb8;
@@ -147,6 +135,18 @@ BOOL SetEntrypointHook(HANDLE hProcess) {
 	// call VirtualProtect
 	pShellcode[dwOffset++] = 0xe8;
 	*(DWORD *)(pShellcode + dwOffset) = (DWORD)VirtualProtect - ((DWORD)pRemoteAddress + dwOffset + 4);
+	dwOffset += sizeof(DWORD);
+
+	// mov eax, offset libname
+	// push eax
+	pShellcode[dwOffset++] = 0xb8;
+	*(DWORD *)(pShellcode + dwOffset) = (DWORD)pRemoteAddress + SHELLCODE_SIZE + 9;
+	dwOffset += sizeof(DWORD);
+	pShellcode[dwOffset++] = 0x50;
+
+	// call LoadLibraryW
+	pShellcode[dwOffset++] = 0xe8;
+	*(DWORD *)(pShellcode + dwOffset) = (DWORD)LoadLibraryW - ((DWORD)pRemoteAddress + dwOffset + 4);
 	dwOffset += sizeof(DWORD);
 
 	// jmp entrypoint
