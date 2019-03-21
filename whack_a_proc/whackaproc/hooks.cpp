@@ -6,6 +6,7 @@
 #define MYPROC_NUM 100
 
 extern HANDLE hPipe;
+extern HMODULE hGlobalModule;
 
 DWORD pMyProcesses[MYPROC_NUM] = { 0 };
 
@@ -13,15 +14,16 @@ VOID ScanProcess(DWORD dwPid, DWORD dwTid) {
 	DWORD dwSize;
 	DWORD dwCode = CODE_SCAN;
 
-	if (dwPid == GetCurrentProcessId())
-		return;
+	/*if (dwPid == GetCurrentProcessId())
+		return;*/
 	WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
 	WriteFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL);
 	ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
-	if (dwCode == CODE_OK)
-		MessageBoxA(NULL, "yes", "scan", 0);
-	else
-		MessageBoxA(NULL, "noo", "scan", 0);
+	if (dwCode != CODE_OK)
+		MessageBoxA(NULL, "Error code!", "scan", 0);
+
+	if (dwTid == 0)
+		return;
 
 	for (int i = 0; i < MYPROC_NUM && pMyProcesses[i]; i++) {
 		if (dwPid == pMyProcesses[i]) {
@@ -30,10 +32,8 @@ VOID ScanProcess(DWORD dwPid, DWORD dwTid) {
 			WriteFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL);
 			WriteFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL);
 			ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
-			if (dwCode == CODE_OK)
-				MessageBoxA(NULL, "yes", "inject", 0);
-			else
-				MessageBoxA(NULL, "noo", "inject", 0);
+			if (dwCode != CODE_OK)
+				MessageBoxA(NULL, "Error code!", "scan", 0);
 		}
 	}
 }
@@ -116,7 +116,7 @@ VOID __stdcall bh_NtCreateThreadEx(
 	IN  SIZE_T StackSize OPTIONAL,
 	IN  SIZE_T MaximumStackSize OPTIONAL,
 	IN  PVOID AttributeList OPTIONAL
-	) {
+) {
 	DWORD dwPid;
 	DWORD dwTid;
 	if ((CreateFlags & CREATE_SUSPENDED) == 0) {
@@ -130,4 +130,69 @@ VOID __stdcall bh_NtResumeThread(HANDLE ThreadHandle, PULONG SuspendCount) {
 	DWORD dwPid = GetProcessIdOfThread(ThreadHandle);
 	DWORD dwTid = GetThreadId(ThreadHandle);
 	ScanProcess(dwPid, dwTid);
+}
+
+VOID __stdcall bh_LoadLibraryA(LPCSTR LibName) {
+	LPVOID pRetAddress;
+	HMODULE hModule;
+	__asm {
+		mov eax, [ebp]
+		mov eax, [eax + 4]
+		mov pRetAddress, eax
+	}
+	if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)pRetAddress, &hModule) || hModule == GetModuleHandleA(NULL)) {
+		ScanProcess(GetCurrentProcessId(), GetCurrentThreadId());
+	}
+}
+
+VOID __stdcall bh_LoadLibraryW(LPCWSTR LibName) {
+	LPVOID pRetAddress;
+	HMODULE hModule;
+	__asm {
+		mov eax, [ebp]
+		mov eax, [eax + 4]
+		mov pRetAddress, eax
+	}
+	if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)pRetAddress, &hModule) || hModule == GetModuleHandleA(NULL)) {
+		ScanProcess(GetCurrentProcessId(), GetCurrentThreadId());
+	}
+}
+
+VOID __stdcall ah_NtProtectVirtualMemory(
+	IN HANDLE               ProcessHandle,
+	IN OUT PVOID            *BaseAddress,
+	IN OUT PULONG           NumberOfBytesToProtect,
+	IN ULONG                NewAccessProtection,
+	OUT PULONG              OldAccessProtection,
+	DWORD retvalue) {
+	LPVOID pRetAddress, pStackFrame;
+	HMODULE hModule;
+	BOOL bDoScan = FALSE;
+
+	if (NewAccessProtection == PAGE_EXECUTE || NewAccessProtection == PAGE_EXECUTE_READ || NewAccessProtection == PAGE_EXECUTE_READWRITE || NewAccessProtection == PAGE_EXECUTE_WRITECOPY) {
+		__asm {
+			mov eax, [ebp]
+			mov pStackFrame, eax
+		}
+
+		while (!bDoScan) {
+			__asm {
+				mov eax, pStackFrame
+				mov eax, [eax]
+				mov pStackFrame, eax
+				mov eax, [eax + 4]
+				mov pRetAddress, eax
+			}
+			if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)pRetAddress, &hModule)) {
+				if (hModule == GetModuleHandleA(NULL))
+					bDoScan = TRUE;
+				if (hModule == hGlobalModule)
+					break;
+			}
+			else
+				bDoScan = TRUE;
+		}
+		if (bDoScan)
+			ScanProcess(GetProcessId(ProcessHandle), 0);
+	}
 }

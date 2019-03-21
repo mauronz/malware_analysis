@@ -55,4 +55,14 @@ VOID __stdcall bh_NtCreateThreadEx(
 	IN  PVOID AttributeList OPTIONAL
 );
 
+VOID __stdcall ah_NtProtectVirtualMemory(
+	IN HANDLE               ProcessHandle,
+	IN OUT PVOID            *BaseAddress,
+	IN OUT PULONG           NumberOfBytesToProtect,
+	IN ULONG                NewAccessProtection,
+	OUT PULONG              OldAccessProtection,
+	DWORD retvalue);
+
 VOID __stdcall bh_NtResumeThread(HANDLE ThreadHandle, PULONG SuspendCount);
+VOID __stdcall bh_LoadLibraryW(LPCWSTR LibName);
+VOID __stdcall bh_LoadLibraryA(LPCSTR LibName);

@@ -22,28 +22,30 @@ HANDLE CreateThreadPipe(DWORD dwPid, DWORD dwTid) {
 		NULL);                    // default security attribute
 }
 
-VOID DoError(HANDLE hPipe) {
+BOOL DoError(HANDLE hPipe) {
 	DWORD dwSize, dwCode = CODE_ERROR;
-	WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
+	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL)) return FALSE;
+	return TRUE;
 }
 
-VOID DoScan(HANDLE hPipe) {
+BOOL DoScan(HANDLE hPipe) {
 	t_params params = { 0 };
 	DWORD dwSize, dwPid, dwCode;
-	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL) || dwSize != sizeof(dwPid));
+	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL)) return FALSE;
 	params.pid = dwPid;
 	params.quiet = true;
 	PESieve_scan(params);
 	dwCode = CODE_OK;
-	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL) || dwSize != sizeof(dwCode));
+	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL)) return FALSE;
+	return TRUE;
 }
 
-VOID DoInject(HANDLE hPipe) {
+BOOL DoInject(HANDLE hPipe) {
 	DWORD dwSize, dwPid, dwTid, dwCode = CODE_ERROR;
 	HANDLE hProcess;
 	WCHAR pImageFilename[MAX_PATH], pMessage[200];
-	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL) || dwSize != sizeof(dwPid));
-	if (!ReadFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL) || dwSize != sizeof(dwPid));
+	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL)) return FALSE;
+	if (!ReadFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL)) return FALSE;
 	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
 	if (hProcess != INVALID_HANDLE_VALUE) {
 		dwSize = sizeof(pImageFilename);
@@ -55,16 +57,18 @@ VOID DoInject(HANDLE hPipe) {
 		}
 		CloseHandle(hProcess);
 	}
-	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL) || dwSize != sizeof(dwCode));
+	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL)) return FALSE;
+	return TRUE;
 }
 
-VOID DoThread(HANDLE hPipe) {
+BOOL DoThread(HANDLE hPipe) {
 	DWORD dwSize, dwPid, dwTid, dwCode = CODE_ERROR;
-	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL) || dwSize != sizeof(dwPid));
-	if (!ReadFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL) || dwSize != sizeof(dwTid));
+	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL)) return FALSE;
+	if (!ReadFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL)) return FALSE;
 	if (CreateWorkerThread(dwPid, dwTid))
 		dwCode = CODE_OK;
-	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL) || dwSize != sizeof(dwCode));
+	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL)) return FALSE;
+	return TRUE;
 }
 
 BOOL Communicate(HANDLE hPipe) {
@@ -76,9 +80,7 @@ BOOL Communicate(HANDLE hPipe) {
 		return FALSE;
 	}
 	if (ConnectNamedPipe(hPipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED) {
-		while (TRUE) {
-			if (!ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL) || dwSize != sizeof(dwCode))
-				break;
+		while (ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL)) {
 			switch (dwCode) {
 			case CODE_SCAN:
 				DoScan(hPipe);
