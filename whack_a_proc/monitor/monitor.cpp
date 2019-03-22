@@ -16,6 +16,8 @@ DWORD dwThreadCount = 0;
 DWORD dwDllPathSize = 0;
 WCHAR pDllPath[MAX_PATH];
 
+inject_config config;
+
 BOOL SetEntrypointHook(HANDLE hProcess) {
 	SIZE_T written;
 	TdefNtQueryInformationProcess _NtQueryInformationProcess;
@@ -212,6 +214,9 @@ int wmain(int argc, WCHAR **argv) {
 
 	hSemaphore = CreateSemaphoreW(NULL, 0, MAX_THREAD_COUNT, NULL);
 	hThreadCountMutex = CreateMutexW(NULL, FALSE, NULL);
+
+	config.bProtectHook = FALSE;
+	config.level = LEVEL_MEDIUM;
 
 	if (argc > 1) {
 		pTargetCmd = wcsstr(pCmdline, argv[1]);

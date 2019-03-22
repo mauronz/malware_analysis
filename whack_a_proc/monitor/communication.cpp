@@ -5,6 +5,8 @@
 
 #define BUFSIZE 1024
 
+extern inject_config config;
+
 HANDLE CreateThreadPipe(DWORD dwPid, DWORD dwTid) {
 	WCHAR pPipeName[64];
 	wsprintfW(pPipeName, L"\\\\.\\pipe\\whack%08x%08x", dwPid, dwTid);
@@ -71,10 +73,14 @@ BOOL DoThread(HANDLE hPipe) {
 	return TRUE;
 }
 
+BOOL DoInit(HANDLE hPipe) {
+	DWORD dwSize;
+	if (!WriteFile(hPipe, &config, sizeof(config), &dwSize, NULL)) return FALSE;
+	return TRUE;
+}
+
 BOOL Communicate(HANDLE hPipe) {
 	DWORD dwCode, dwSize;
-
-	Sleep(2000);
 
 	if (hPipe == INVALID_HANDLE_VALUE) {
 		return FALSE;
@@ -90,6 +96,9 @@ BOOL Communicate(HANDLE hPipe) {
 				break;
 			case CODE_THREAD:
 				DoThread(hPipe);
+				break;
+			case CODE_INIT:
+				DoInit(hPipe);
 				break;
 			default:
 				DoError(hPipe);
