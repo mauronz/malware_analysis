@@ -205,12 +205,18 @@ HANDLE CreateWorkerThread(DWORD dwPid, DWORD dwTid) {
 	return CreateThread(NULL, 0, ThreadRoutine, (LPVOID)hPipe, 0, NULL);
 }
 
+VOID PrintUsage(WCHAR *argv0) {
+	wprintf(L"Usage: %s [options] target_command_line\n", argv0);
+	wprintf(L"Options:\n/level [0,1,2]\n/protect");
+}
+
 int wmain(int argc, WCHAR **argv) {
 	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	LPWSTR pTargetCmd;
 	LPWSTR pCmdline = GetCommandLineW();
-	BOOL bRunning = TRUE;
+	BOOL bRunning = TRUE, bPrintUsage = FALSE;
+	int i = 1;
 
 	hSemaphore = CreateSemaphoreW(NULL, 0, MAX_THREAD_COUNT, NULL);
 	hThreadCountMutex = CreateMutexW(NULL, FALSE, NULL);
@@ -218,8 +224,37 @@ int wmain(int argc, WCHAR **argv) {
 	config.bProtectHook = FALSE;
 	config.level = LEVEL_MEDIUM;
 
-	if (argc > 1) {
-		pTargetCmd = wcsstr(pCmdline, argv[1]);
+	if (argc == 1)
+		bPrintUsage = TRUE;
+
+	while (i < argc && !bPrintUsage) {
+		if (!wcscmp(argv[i], L"/protect")) {
+			config.bProtectHook = TRUE;
+		}
+		else if (!wcscmp(argv[i], L"/level")) {
+			if (i + 1 <= argc || !isdigit(argv[i + 1][0]))
+				bPrintUsage = TRUE;
+			else {
+				config.level = (HookLevel)_wtoi(argv[i + 1]);
+				if (config.level < LEVEL_LOW || config.level > LEVEL_HIGH)
+					bPrintUsage = TRUE;
+			}
+			i += 2;
+		}
+		else
+			break;
+	}
+
+	if (i >= argc)
+		bPrintUsage = TRUE;
+
+	if (bPrintUsage) {
+		PrintUsage(argv[0]);
+	}
+	else {
+		pTargetCmd = wcsstr(pCmdline, argv[i]);
+		if (*(pTargetCmd - 1) == '"')
+			pTargetCmd--;
 		ZeroMemory(&si, sizeof(si));
 		ZeroMemory(&si, sizeof(pi));
 		if (!CreateProcessW(NULL, pTargetCmd, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
@@ -237,7 +272,6 @@ int wmain(int argc, WCHAR **argv) {
 				bRunning = FALSE;
 			ReleaseMutex(hThreadCountMutex);
 		}
-		//WaitForSingleObject(hThread, INFINITE);
 	}
 
 	return 0;
