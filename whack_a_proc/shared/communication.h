@@ -17,9 +17,10 @@ enum HookLevel {
 };
 
 typedef struct _inject_config {
-	BOOL bProtectHook;
-	HookLevel level;
-} inject_config;
+	BOOL ProtectHook;
+	BOOL AllProcesses;
+	HookLevel Level;
+} INJECT_CONFIG;
 
 BOOL Communicate(HANDLE hPipe);
 HANDLE CreateThreadPipe(DWORD dwPid, DWORD dwTid);

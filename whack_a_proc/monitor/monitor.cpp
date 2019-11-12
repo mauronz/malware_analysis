@@ -16,7 +16,7 @@ DWORD dwThreadCount = 0;
 DWORD dwDllPathSize = 0;
 WCHAR pDllPath[MAX_PATH];
 
-inject_config config;
+INJECT_CONFIG config;
 
 BOOL SetEntrypointHook(HANDLE hProcess) {
 	SIZE_T written;
@@ -206,8 +206,24 @@ HANDLE CreateWorkerThread(DWORD dwPid, DWORD dwTid) {
 }
 
 VOID PrintUsage(WCHAR *argv0) {
-	wprintf(L"Usage: %s [options] target_command_line\n", argv0);
-	wprintf(L"Options:\n/level [0,1,2]\n/protect");
+	wprintf(L"Usage: %s [options] target_command_line\n\n\
+Example: %s /level 1 /all notepad.exe mytextfile.txt\n\n\
+Options:\n\
+/level [0,1,2]:\n\
+    Each level increases the number of APIs hooked,\n\
+    potentially leading to new findings, but at the cost of performances.\n\
+	0: Process and thread manipulation.\n\
+	   Hooked APIs: NtCreateThread, NtCreateThreadEx, NtResumeThread, NtCreateUserProcess\n\
+	1: Making memory executable.\n\
+	   Hooked APIs: NtProtectVirtualMemory\n\
+	2: Library loading.\n\
+	   Hooked APIs: LoadLibraryA, LoadLibraryW\n\n\
+/protect:\n\
+    Set a hook on ZwMapViewOfSection to prevent a remapping of ntdll.dll.\n\
+    If ntdll.dll is being mapped, the output pointer to the mapped section (BaseAddress)\n\
+    is replaced with the currently mapped ntdll.dll (that is hooked).\n\n\
+/all:\n\
+    Inject into newly created processes without asking for confirmation.", argv0, argv0);
 }
 
 int wmain(int argc, WCHAR **argv) {
@@ -221,25 +237,31 @@ int wmain(int argc, WCHAR **argv) {
 	hSemaphore = CreateSemaphoreW(NULL, 0, MAX_THREAD_COUNT, NULL);
 	hThreadCountMutex = CreateMutexW(NULL, FALSE, NULL);
 
-	config.bProtectHook = FALSE;
-	config.level = LEVEL_MEDIUM;
+	config.ProtectHook = FALSE;
+	config.AllProcesses = FALSE;
+	config.Level = LEVEL_MEDIUM;
 
 	if (argc == 1)
 		bPrintUsage = TRUE;
 
 	while (i < argc && !bPrintUsage) {
 		if (!wcscmp(argv[i], L"/protect")) {
-			config.bProtectHook = TRUE;
+			config.ProtectHook = TRUE;
+			i += 1;
 		}
 		else if (!wcscmp(argv[i], L"/level")) {
 			if (i + 1 <= argc || !isdigit(argv[i + 1][0]))
 				bPrintUsage = TRUE;
 			else {
-				config.level = (HookLevel)_wtoi(argv[i + 1]);
-				if (config.level < LEVEL_LOW || config.level > LEVEL_HIGH)
+				config.Level = (HookLevel)_wtoi(argv[i + 1]);
+				if (config.Level < LEVEL_LOW || config.Level > LEVEL_HIGH)
 					bPrintUsage = TRUE;
 			}
 			i += 2;
+		}
+		else if (!wcscmp(argv[i], L"/all")) {
+			config.AllProcesses = TRUE;
+			i += 1;
 		}
 		else
 			break;

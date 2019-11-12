@@ -5,7 +5,7 @@
 
 #define BUFSIZE 1024
 
-extern inject_config config;
+extern INJECT_CONFIG config;
 
 HANDLE CreateThreadPipe(DWORD dwPid, DWORD dwTid) {
 	WCHAR pPipeName[64];
@@ -46,17 +46,30 @@ BOOL DoInject(HANDLE hPipe) {
 	DWORD dwSize, dwPid, dwTid, dwCode = CODE_ERROR;
 	HANDLE hProcess;
 	WCHAR pImageFilename[MAX_PATH], pMessage[200];
+	BOOL bInject = FALSE;
 	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL)) return FALSE;
 	if (!ReadFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL)) return FALSE;
 	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
 	if (hProcess != INVALID_HANDLE_VALUE) {
-		dwSize = sizeof(pImageFilename);
-		QueryFullProcessImageNameW(hProcess, 0, pImageFilename, &dwSize);
-		wsprintfW(pMessage, L"New process %s (PID: %d). Do you want to inject into it?", pImageFilename, dwPid);
-		if (MessageBoxW(NULL, pMessage, L"Injector", MB_YESNO) == IDYES) {
+		if (config.AllProcesses) {
+			bInject = TRUE;
+		}
+		else {
+			dwSize = sizeof(pImageFilename);
+			QueryFullProcessImageNameW(hProcess, 0, pImageFilename, &dwSize);
+			wsprintfW(pMessage, L"New process %s (PID: %d). Do you want to inject into it?", pImageFilename, dwPid);
+			bInject = MessageBoxW(NULL, pMessage, L"Injector", MB_YESNO) == IDYES;
+		}
+
+		if (bInject) {
 			if (SetEntrypointHook(hProcess) && CreateWorkerThread(dwPid, dwTid))
 				dwCode = CODE_OK;
+			else
+				dwCode = CODE_ERROR;
 		}
+		else
+			dwCode = CODE_OK;
+
 		CloseHandle(hProcess);
 	}
 	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL)) return FALSE;
