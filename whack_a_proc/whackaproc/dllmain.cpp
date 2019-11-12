@@ -5,7 +5,7 @@
 
 HMODULE hGlobalModule;
 HANDLE hPipe;
-inject_config config;
+INJECT_CONFIG config;
 
 
 BOOL APIENTRY DllMain( HMODULE hModule,
