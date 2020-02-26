@@ -1,14 +1,36 @@
 #include "hooks.h"
 #include "injector.h"
 #include "communication.h"
+#include "functions.h"
 #include <Psapi.h>
 
 #define MYPROC_NUM 100
 
+typedef struct _TARGET_PROCESS {
+	DWORD Pid;
+	BOOL Injected;
+} TARGET_PROCESS;
+
 extern HANDLE hPipe;
 extern HMODULE hGlobalModule;
 
-DWORD pMyProcesses[MYPROC_NUM] = { 0 };
+TARGET_PROCESS pMyProcesses[MYPROC_NUM] = { 0 };
+
+VOID InjectProcess(DWORD dwPid, DWORD dwTid) {
+	DWORD dwSize;
+	DWORD dwCode = CODE_INJECT;
+	for (int i = 0; i < MYPROC_NUM && pMyProcesses[i].Pid; i++) {
+		if (dwPid == pMyProcesses[i].Pid && !pMyProcesses[i].Injected) {
+			WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
+			WriteFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL);
+			WriteFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL);
+			ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
+			if (dwCode != CODE_OK)
+				MessageBoxA(NULL, "Error code!", "scan", 0);
+		}
+		pMyProcesses[i].Injected = TRUE;
+	}
+}
 
 VOID ScanProcess(DWORD dwPid, DWORD dwTid) {
 	DWORD dwSize;
@@ -24,21 +46,10 @@ VOID ScanProcess(DWORD dwPid, DWORD dwTid) {
 
 	if (dwTid == 0)
 		return;
-
-	for (int i = 0; i < MYPROC_NUM && pMyProcesses[i]; i++) {
-		if (dwPid == pMyProcesses[i]) {
-			DWORD dwCode = CODE_INJECT;
-			WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
-			WriteFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL);
-			WriteFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL);
-			ReadFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL);
-			if (dwCode != CODE_OK)
-				MessageBoxA(NULL, "Error code!", "scan", 0);
-		}
-	}
+	InjectProcess(dwPid, dwTid);
 }
 
-VOID __stdcall ah_NtCreateUserProcess(
+NTSTATUS __stdcall bh_NtCreateUserProcess(
 	_Out_ PHANDLE ProcessHandle,
 	_Out_ PHANDLE ThreadHandle,
 	_In_ ACCESS_MASK ProcessDesiredAccess,
@@ -49,17 +60,37 @@ VOID __stdcall ah_NtCreateUserProcess(
 	_In_ ULONG ThreadFlags, // THREAD_CREATE_FLAGS_*
 	_In_opt_ PVOID ProcessParameters, // PRTL_USER_PROCESS_PARAMETERS
 	_Inout_ PVOID CreateInfo,
-	_In_opt_ PVOID AttributeList,
-	ULONG retvalue
+	_In_opt_ PVOID AttributeList
 ) {
-	if (!retvalue) {
+	NTSTATUS status = pOrigNtCreateUserProcess(
+		ProcessHandle,
+		ThreadHandle,
+		ProcessDesiredAccess,
+		ThreadDesiredAccess,
+		ProcessObjectAttributes,
+		ThreadObjectAttributes,
+		ProcessFlags,
+		ThreadFlags | THREAD_CREATE_FLAGS_CREATE_SUSPENDED,
+		ProcessParameters,
+		CreateInfo,
+		AttributeList
+	);
+	if (!status) {
 		for (int i = 0; i < MYPROC_NUM; i++) {
-			if (!pMyProcesses[i]) {
-				pMyProcesses[i] = GetProcessId(*ProcessHandle);
+			if (!pMyProcesses[i].Pid) {
+				pMyProcesses[i].Pid = GetProcessId(*ProcessHandle);
 				break;
 			}
 		}
+		if ((ThreadFlags & THREAD_CREATE_FLAGS_CREATE_SUSPENDED) == 0) {
+			DWORD dwPid = GetProcessId(*ProcessHandle);
+			DWORD dwTid = GetThreadId(*ThreadHandle);
+			InjectProcess(dwPid, dwTid);
+			ULONG ulSuspendCount;
+			pOrigNtResumeThread(*ThreadHandle, &ulSuspendCount);
+		}
 	}
+	return status;
 }
 
 VOID __stdcall ah_ZwMapViewOfSection(

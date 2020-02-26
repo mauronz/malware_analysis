@@ -5,15 +5,19 @@
 #include "hooks.h"
 #include "APIhooklib.h"
 #include "communication.h"
+#include "functions.h"
 
 extern HMODULE hGlobalModule;
 extern INJECT_CONFIG config;
 
+TypedefNtCreateUserProcess pOrigNtCreateUserProcess = NULL;
+TypedefNtResumeThread pOrigNtResumeThread = NULL;
+
 BOOL SetHooks() {
 	SetHookByName("ntdll.dll", "NtCreateThread", 8, CV_STDCALL, (FARPROC)bh_NtCreateThread, NULL, TRUE, FALSE);
 	SetHookByName("ntdll.dll", "NtCreateThreadEx", 11, CV_STDCALL, (FARPROC)bh_NtCreateThreadEx, NULL, TRUE, FALSE);
-	SetHookByName("ntdll.dll", "NtResumeThread", 2, CV_STDCALL, (FARPROC)bh_NtResumeThread, NULL, TRUE, FALSE);
-	SetHookByName("ntdll.dll", "NtCreateUserProcess", 11, CV_STDCALL, NULL, (FARPROC)ah_NtCreateUserProcess, TRUE, FALSE);
+	pOrigNtResumeThread = (TypedefNtResumeThread)SetHookByName("ntdll.dll", "NtResumeThread", 2, CV_STDCALL, (FARPROC)bh_NtResumeThread, NULL, TRUE, FALSE);
+	pOrigNtCreateUserProcess = (TypedefNtCreateUserProcess)SetHookByName("ntdll.dll", "NtCreateUserProcess", 11, CV_STDCALL, (FARPROC)bh_NtCreateUserProcess, NULL, FALSE, TRUE);
 	if (config.ProtectHook) {
 		SetHookByName("ntdll.dll", "ZwMapViewOfSection", 10, CV_STDCALL, NULL, (FARPROC)ah_ZwMapViewOfSection, TRUE, FALSE);
 	}

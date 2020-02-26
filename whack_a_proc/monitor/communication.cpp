@@ -31,11 +31,12 @@ BOOL DoError(HANDLE hPipe) {
 }
 
 BOOL DoScan(HANDLE hPipe) {
-	t_params params = { 0 };
+	pesieve::t_params params = { 0 };
 	DWORD dwSize, dwPid, dwCode;
 	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL)) return FALSE;
 	params.pid = dwPid;
 	params.quiet = true;
+	params.no_hooks = true;
 	PESieve_scan(params);
 	dwCode = CODE_OK;
 	if (!WriteFile(hPipe, &dwCode, sizeof(dwCode), &dwSize, NULL)) return FALSE;
@@ -49,6 +50,7 @@ BOOL DoInject(HANDLE hPipe) {
 	BOOL bInject = FALSE;
 	if (!ReadFile(hPipe, &dwPid, sizeof(dwPid), &dwSize, NULL)) return FALSE;
 	if (!ReadFile(hPipe, &dwTid, sizeof(dwTid), &dwSize, NULL)) return FALSE;
+	MessageBoxA(NULL, "injecting", "", 0);
 	hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid);
 	if (hProcess != INVALID_HANDLE_VALUE) {
 		if (config.AllProcesses) {

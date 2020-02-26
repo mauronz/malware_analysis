@@ -2,7 +2,7 @@
 
 #include <Windows.h>
 
-VOID __stdcall ah_NtCreateUserProcess(
+NTSTATUS __stdcall bh_NtCreateUserProcess(
 	_Out_ PHANDLE ProcessHandle,
 	_Out_ PHANDLE ThreadHandle,
 	_In_ ACCESS_MASK ProcessDesiredAccess,
@@ -13,8 +13,7 @@ VOID __stdcall ah_NtCreateUserProcess(
 	_In_ ULONG ThreadFlags, // THREAD_CREATE_FLAGS_*
 	_In_opt_ PVOID ProcessParameters, // PRTL_USER_PROCESS_PARAMETERS
 	_Inout_ PVOID CreateInfo,
-	_In_opt_ PVOID AttributeList,
-	ULONG retvalue
+	_In_opt_ PVOID AttributeList
 );
 
 VOID __stdcall ah_ZwMapViewOfSection(

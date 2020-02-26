@@ -171,6 +171,7 @@
   <ItemGroup>
     <ClInclude Include="..\shared\communication.h" />
     <ClInclude Include="APIhooklib.h" />
+    <ClInclude Include="functions.h" />
     <ClInclude Include="hooks.h" />
     <ClInclude Include="injector.h" />
     <ClInclude Include="peb.h" />
